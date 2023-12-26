@@ -9,11 +9,15 @@ import UIKit
 
 class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate{
 
-    var slider : UISlider!
+    var sliderIntensity : UISlider!
     var changeButton : UIButton!
     var saveButton : UIButton!
     var imageView : UIImageView!
     var currentImage: UIImage!
+    
+    var context: CIContext!
+    var currentFilter: CIFilter!
+    
     
     override func loadView() {
         view = UIView()
@@ -37,9 +41,10 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
 //        intensityLabel.backgroundColor = .cyan
         view.addSubview(intensityLabel)
         
-        slider = UISlider()
-        slider.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(slider)
+        sliderIntensity = UISlider()
+        sliderIntensity.translatesAutoresizingMaskIntoConstraints = false
+        sliderIntensity.setValue(1, animated: false)
+        view.addSubview(sliderIntensity)
         
         
         changeButton = UIButton(type: .system)
@@ -63,26 +68,26 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             photoView.heightAnchor.constraint(equalTo: photoView.widthAnchor),
             
             imageView.topAnchor.constraint(equalTo: photoView.topAnchor, constant: 10),
-            imageView.bottomAnchor.constraint(equalTo: photoView.bottomAnchor, constant: 10),
+            imageView.bottomAnchor.constraint(equalTo: photoView.bottomAnchor, constant: -10),
             imageView.leadingAnchor.constraint(equalTo: photoView.leadingAnchor, constant: 10),
-            imageView.trailingAnchor.constraint(equalTo: photoView.trailingAnchor, constant: 10),
+            imageView.trailingAnchor.constraint(equalTo: photoView.trailingAnchor, constant: -10),
             
             intensityLabel.leadingAnchor.constraint(equalTo: photoView.leadingAnchor, constant: 2),
             intensityLabel.topAnchor.constraint(equalTo: photoView.bottomAnchor),
             intensityLabel.widthAnchor.constraint(equalTo: photoView.widthAnchor, multiplier: 0.25),
             intensityLabel.heightAnchor.constraint(equalToConstant: 40),
             
-            slider.topAnchor.constraint(equalTo: photoView.bottomAnchor),
-            slider.leadingAnchor.constraint(equalTo: intensityLabel.trailingAnchor),
-            slider.widthAnchor.constraint(equalTo: photoView.widthAnchor, multiplier: 0.75),
-            slider.heightAnchor.constraint(equalTo: intensityLabel.heightAnchor),
+            sliderIntensity.topAnchor.constraint(equalTo: photoView.bottomAnchor),
+            sliderIntensity.leadingAnchor.constraint(equalTo: intensityLabel.trailingAnchor),
+            sliderIntensity.widthAnchor.constraint(equalTo: photoView.widthAnchor, multiplier: 0.75),
+            sliderIntensity.heightAnchor.constraint(equalTo: intensityLabel.heightAnchor),
             
-            changeButton.topAnchor.constraint(equalTo: slider.bottomAnchor, constant: 20),
+            changeButton.topAnchor.constraint(equalTo: sliderIntensity.bottomAnchor, constant: 20),
             changeButton.leadingAnchor.constraint(equalTo: photoView.leadingAnchor),
             changeButton.widthAnchor.constraint(equalTo: photoView.widthAnchor, multiplier: 0.5),
             changeButton.heightAnchor.constraint(equalToConstant: 60),
             
-            saveButton.topAnchor.constraint(equalTo: slider.bottomAnchor, constant: 20),
+            saveButton.topAnchor.constraint(equalTo: sliderIntensity.bottomAnchor, constant: 20),
             saveButton.leadingAnchor.constraint(equalTo: changeButton.trailingAnchor),
             saveButton.widthAnchor.constraint(equalTo: photoView.widthAnchor, multiplier: 0.5),
             saveButton.heightAnchor.constraint(equalToConstant: 60)
@@ -96,6 +101,8 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     
     
     
+    
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -103,6 +110,12 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         navigationItem.leftBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(importPicture))
         
+        
+        context = CIContext()
+        currentFilter = CIFilter(name: "CISepiaTone")
+        sliderIntensity.addTarget(self, action: #selector(intensityChanged), for: .valueChanged)
+        changeButton.addTarget(self, action: #selector(changeFilter), for: .touchUpInside)
+        saveButton.addTarget(self, action: #selector(imageSave), for: .touchUpInside)
     }
     
     
@@ -126,7 +139,90 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         currentImage = image
         
+        
+        let beginImage = CIImage(image: currentImage)
+        currentFilter.setValue(beginImage, forKey: kCIInputImageKey)
+        applyProcessing()
+        
+        
     }
+    
+    @objc func intensityChanged(_ sender: Any) {
+        applyProcessing()
+        
+    }
+    
+    @objc func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeRawPointer) {
+        if let error = error {
+            // we got back an error!
+            let ac = UIAlertController(title: "Save error", message: error.localizedDescription, preferredStyle: .alert)
+            ac.addAction(UIAlertAction(title: "OK", style: .default))
+            present(ac, animated: true)
+        } else {
+            let ac = UIAlertController(title: "Saved!", message: "Your altered image has been saved to your photos.", preferredStyle: .alert)
+            ac.addAction(UIAlertAction(title: "OK", style: .default))
+            present(ac, animated: true)
+        }
+    }
+    
+    @objc func imageSave(_ sender : Any){
+        guard let image = imageView.image else { return }
+        
+        UIImageWriteToSavedPhotosAlbum(image, self, #selector(image(_:didFinishSavingWithError:contextInfo:)), nil)
+    }
+    
+    @objc func changeFilter(_ sender: Any){
+        let alertController = UIAlertController(title: "Choose filter", message: nil, preferredStyle: .alert)
+        alertController.addAction(UIAlertAction(title: "CIBumpDistortion", style: .default, handler: setFilter))
+        alertController.addAction(UIAlertAction(title: "CIGaussianBlur", style: .default, handler: setFilter))
+        alertController.addAction(UIAlertAction(title: "CIPixellate", style: .default, handler: setFilter))
+        alertController.addAction(UIAlertAction(title: "CISepiaTone", style: .default, handler: setFilter))
+        alertController.addAction(UIAlertAction(title: "CITwirlDistortion", style: .default, handler: setFilter))
+        alertController.addAction(UIAlertAction(title: "CIUnsharpMask", style: .default, handler: setFilter))
+        alertController.addAction(UIAlertAction(title: "CIVignette", style: .default, handler: setFilter))
+        alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alertController, animated: true)
+    }
+    
+    func setFilter(action: UIAlertAction){
+        guard currentImage != nil else { return }
+        
+        guard let actionTitle = action.title else { return }
+        
+        currentFilter = CIFilter(name: actionTitle)
+        
+        let beginImage = CIImage(image: currentImage)
+        currentFilter.setValue(beginImage, forKey: kCIInputImageKey)
+        
+        applyProcessing()
+    }
+    
+    func applyProcessing(){
+        
+        let inputKeys = currentFilter.inputKeys
+        
+        if inputKeys.contains(kCIInputIntensityKey) {
+            currentFilter.setValue(sliderIntensity.value, forKey: kCIInputIntensityKey)
+        }
+        if inputKeys.contains(kCIInputRadiusKey) {
+            currentFilter.setValue(sliderIntensity.value * 200, forKey: kCIInputRadiusKey)
+        }
+        if inputKeys.contains(kCIInputScaleKey) {
+            currentFilter.setValue(sliderIntensity.value * 10, forKey: kCIInputScaleKey)
+        }
+        if inputKeys.contains(kCIInputCenterKey) {
+            currentFilter.setValue(CIVector(x: currentImage.size.width / 2, y: currentImage.size.height / 2), forKey: kCIInputCenterKey)
+        }
+        
+        
+        
+        if let cgImg = context.createCGImage(currentFilter.outputImage!, from: currentFilter.outputImage!.extent){
+            let processedImage = UIImage(cgImage: cgImg)
+            
+            self.imageView.image = processedImage
+        }
+    }
+    
 
 }
 
