@@ -166,7 +166,12 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
     }
     
     @objc func imageSave(_ sender : Any){
-        guard let image = imageView.image else { return }
+        guard let image = imageView.image else {
+            let alertController = UIAlertController(title: "Error", message: "Choose photo", preferredStyle: .alert)
+            alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+            present(alertController, animated: true)
+            return
+        }
         
         UIImageWriteToSavedPhotosAlbum(image, self, #selector(image(_:didFinishSavingWithError:contextInfo:)), nil)
     }
@@ -193,7 +198,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
         
         let beginImage = CIImage(image: currentImage)
         currentFilter.setValue(beginImage, forKey: kCIInputImageKey)
-        
+        changeButton.setTitle(action.title, for: .normal)
         applyProcessing()
     }
     
@@ -221,6 +226,7 @@ class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavig
             
             self.imageView.image = processedImage
         }
+        
     }
     
 
